@@ -50,3 +50,6 @@ coverage/
 ### Docker ###
 *.tar
 docker-compose.override.yml
+
+## Docker
+./db

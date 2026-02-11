@@ -6,6 +6,7 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -71,6 +72,16 @@ public class ApiExceptionHandler {
                 .path(request.getRequestURI())
                 .build();
 
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidRequest(HttpMessageNotReadableException ex) {
+        ApiErrorResponse body = ApiErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error(ex.getMessage() != null ? ex.getMessage() : "Bad request")
+                .build();
         return ResponseEntity.badRequest().body(body);
     }
 

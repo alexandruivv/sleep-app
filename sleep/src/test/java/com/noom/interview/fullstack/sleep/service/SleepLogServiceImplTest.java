@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -181,5 +182,57 @@ class SleepLogServiceImplTest {
 
         verifyNoMoreInteractions(appUserRepository, sleepEntityRepository);
         verifyNoInteractions(sleepEntryMapper);
+    }
+
+    @Test
+    void getLastNightLog_returnsResponse_whenFound() {
+        UUID userId = UUID.randomUUID();
+        LocalDate todayUtc = LocalDate.now(ZoneOffset.UTC);
+
+        SleepEntryEntity entity = SleepEntryEntity.builder()
+                .id(UUID.randomUUID())
+                .sleepDate(todayUtc)
+                .timeInBedStart(Instant.parse("2026-02-10T22:00:00Z"))
+                .timeInBedEnd(Instant.parse("2026-02-11T06:00:00Z"))
+                .totalTimeInBedMinutes(480)
+                .morningFeeling(MorningFeeling.GOOD)
+                .build();
+
+        SleepLogResponse response = SleepLogResponse.builder()
+                .id(entity.getId())
+                .sleepDate(todayUtc)
+                .totalTimeInBedMinutes(480)
+                .morningFeeling(MorningFeeling.GOOD)
+                .build();
+
+        when(sleepEntityRepository.findByUserIdAndSleepDate(userId, todayUtc))
+                .thenReturn(Optional.of(entity));
+        when(sleepEntryMapper.toResponse(entity)).thenReturn(response);
+
+        SleepLogResponse actual = service.getLastNightLog(userId);
+
+        assertThat(actual).isSameAs(response);
+
+        verify(sleepEntityRepository).findByUserIdAndSleepDate(userId, todayUtc);
+        verify(sleepEntryMapper).toResponse(entity);
+        verifyNoMoreInteractions(sleepEntityRepository, sleepEntryMapper);
+        verifyNoInteractions(appUserRepository);
+    }
+
+    @Test
+    void getLastNightLog_throwsNotFound_whenMissing() {
+        UUID userId = UUID.randomUUID();
+        LocalDate todayUtc = LocalDate.now(ZoneOffset.UTC);
+
+        when(sleepEntityRepository.findByUserIdAndSleepDate(userId, todayUtc))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getLastNightLog(userId))
+                .isInstanceOf(EntityNotFoundException.class)
+                .hasMessageContaining("not found");
+
+        verify(sleepEntityRepository).findByUserIdAndSleepDate(userId, todayUtc);
+        verifyNoMoreInteractions(sleepEntryMapper);
+        verifyNoInteractions(sleepEntryMapper, appUserRepository);
     }
 }

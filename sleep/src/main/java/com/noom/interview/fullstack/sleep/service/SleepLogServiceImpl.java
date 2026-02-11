@@ -8,15 +8,18 @@ import com.noom.interview.fullstack.sleep.mapper.SleepEntryMapper;
 import com.noom.interview.fullstack.sleep.repository.AppUserRepository;
 import com.noom.interview.fullstack.sleep.repository.SleepEntityRepository;
 import com.noom.interview.fullstack.sleep.web.requests.CreateSleepLogRequest;
+import com.noom.interview.fullstack.sleep.web.responses.SleepLogAveragesResponse;
 import com.noom.interview.fullstack.sleep.web.responses.SleepLogResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 
 import javax.persistence.EntityNotFoundException;
-import javax.transaction.Transactional;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -25,6 +28,7 @@ public class SleepLogServiceImpl implements SleepLogService {
     private final AppUserRepository appUserRepository;
     private final SleepEntityRepository sleepEntityRepository;
     private final SleepEntryMapper sleepEntryMapper;
+    private final SleepLogCalculatorService sleepLogCalculatorService;
 
     @Override
     @Transactional
@@ -72,5 +76,26 @@ public class SleepLogServiceImpl implements SleepLogService {
                 );
 
         return sleepEntryMapper.toResponse(entity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SleepLogAveragesResponse getLast30DayAverages(UUID userId) {
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate thirtyDaysAgo = today.minusDays(30);
+        List<SleepEntryEntity> sleepEntries = sleepEntityRepository.findByUserIdAndSleepDateBetween(userId, thirtyDaysAgo, today);
+        if (CollectionUtils.isEmpty(sleepEntries)) {
+            throw new EntityNotFoundException("No sleep logs found for user in the last 30 days");
+        }
+
+        return SleepLogAveragesResponse.builder()
+                .rangeStart(thirtyDaysAgo)
+                .rangeEnd(today)
+                .averageTimeInBedMinutes(sleepLogCalculatorService.calculateAverageTimeInBed(sleepEntries))
+                .averageTimeUserGetsInBed(sleepLogCalculatorService.calculateAverageTimeUserGetsInBed(sleepEntries))
+                .averageTimeUserGetsOutOfBed(sleepLogCalculatorService.calculateAverageTimeUserGetsOutOfBed(sleepEntries))
+                .morningFeelingFrequencies(sleepLogCalculatorService.calculateMorningFrequencies(sleepEntries))
+                .build();
+
     }
 }

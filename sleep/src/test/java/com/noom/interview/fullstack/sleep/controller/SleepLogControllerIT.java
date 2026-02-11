@@ -130,4 +130,38 @@ class SleepLogControllerIT {
         mockMvc.perform(get("/sleep-log"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void getLast30DayAverages_returns400_whenHeaderMissing() throws Exception {
+        mockMvc.perform(get("/sleep-log/averages/last-30-days"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getLast30DayAverages_returns200_afterCreatingSomeEntries() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        CreateSleepLogRequest req = new CreateSleepLogRequest();
+        req.setTimeInBedStart(Instant.parse("2026-02-10T22:00:00Z"));
+        req.setTimeInBedEnd(Instant.parse("2026-02-11T06:00:00Z"));
+        req.setMorningFeeling(MorningFeeling.GOOD);
+
+        mockMvc.perform(post("/sleep-log")
+                        .header("X-User-Id", userId.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/sleep-log/averages/last-30-days")
+                        .header("X-User-Id", userId.toString())
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.rangeStart").exists())
+                .andExpect(jsonPath("$.rangeEnd").exists())
+                .andExpect(jsonPath("$.averageTimeInBedMinutes").exists())
+                .andExpect(jsonPath("$.morningFeelingFrequencies.GOOD.count").exists())
+                .andExpect(jsonPath("$.morningFeelingFrequencies.OK.count").doesNotExist())
+                .andExpect(jsonPath("$.morningFeelingFrequencies.BAD.count").doesNotExist());
+    }
 }

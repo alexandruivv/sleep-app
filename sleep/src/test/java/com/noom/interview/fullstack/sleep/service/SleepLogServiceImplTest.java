@@ -8,6 +8,7 @@ import com.noom.interview.fullstack.sleep.model.MorningFeeling;
 import com.noom.interview.fullstack.sleep.repository.AppUserRepository;
 import com.noom.interview.fullstack.sleep.repository.SleepEntityRepository;
 import com.noom.interview.fullstack.sleep.web.requests.CreateSleepLogRequest;
+import com.noom.interview.fullstack.sleep.web.responses.SleepLogAveragesResponse;
 import com.noom.interview.fullstack.sleep.web.responses.SleepLogResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,13 +16,15 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.persistence.EntityNotFoundException;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneOffset;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -36,6 +39,9 @@ class SleepLogServiceImplTest {
 
     @Mock
     private SleepEntryMapper sleepEntryMapper;
+
+    @Mock
+    private SleepLogCalculatorService sleepLogCalculatorService;
 
     @InjectMocks
     private SleepLogServiceImpl service;
@@ -234,5 +240,85 @@ class SleepLogServiceImplTest {
         verify(sleepEntityRepository).findByUserIdAndSleepDate(userId, todayUtc);
         verifyNoMoreInteractions(sleepEntryMapper);
         verifyNoInteractions(sleepEntryMapper, appUserRepository);
+    }
+
+    @Test
+    void shouldReturnLast30DayAverages() {
+        UUID userId = UUID.randomUUID();
+
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate thirtyDaysAgo = today.minusDays(30);
+
+        List<SleepEntryEntity> sleepEntries = List.of(
+                new SleepEntryEntity(),
+                new SleepEntryEntity()
+        );
+
+        Map<MorningFeeling, SleepLogAveragesResponse.FeelingFrequency> mockedFrequencies = Map.of(
+                MorningFeeling.GOOD, SleepLogAveragesResponse.FeelingFrequency.builder()
+                        .count(5)
+                        .percentage(new BigDecimal("71.43"))
+                        .build(),
+                MorningFeeling.BAD, SleepLogAveragesResponse.FeelingFrequency.builder()
+                        .count(2)
+                        .percentage(new BigDecimal("28.57"))
+                        .build()
+        );
+
+        when(sleepEntityRepository.findByUserIdAndSleepDateBetween(
+                eq(userId), eq(thirtyDaysAgo), eq(today)))
+                .thenReturn(sleepEntries);
+
+        when(sleepLogCalculatorService.calculateAverageTimeInBed(sleepEntries))
+                .thenReturn(420);
+
+        when(sleepLogCalculatorService.calculateAverageTimeUserGetsInBed(sleepEntries))
+                .thenReturn(LocalTime.of(23, 15));
+
+        when(sleepLogCalculatorService.calculateAverageTimeUserGetsOutOfBed(sleepEntries))
+                .thenReturn(LocalTime.of(7, 30));
+
+        when(sleepLogCalculatorService.calculateMorningFrequencies(sleepEntries))
+                .thenReturn(mockedFrequencies);
+
+        SleepLogAveragesResponse response = service.getLast30DayAverages(userId);
+
+        assertNotNull(response);
+        assertEquals(thirtyDaysAgo, response.getRangeStart());
+        assertEquals(today, response.getRangeEnd());
+        assertEquals(420, response.getAverageTimeInBedMinutes());
+        assertEquals(LocalTime.of(23, 15), response.getAverageTimeUserGetsInBed());
+        assertEquals(LocalTime.of(7, 30), response.getAverageTimeUserGetsOutOfBed());
+        assertEquals(mockedFrequencies, response.getMorningFeelingFrequencies());
+
+        verify(sleepEntityRepository)
+                .findByUserIdAndSleepDateBetween(eq(userId), eq(thirtyDaysAgo), eq(today));
+
+        verify(sleepLogCalculatorService).calculateAverageTimeInBed(sleepEntries);
+        verify(sleepLogCalculatorService).calculateAverageTimeUserGetsInBed(sleepEntries);
+        verify(sleepLogCalculatorService).calculateAverageTimeUserGetsOutOfBed(sleepEntries);
+        verify(sleepLogCalculatorService).calculateMorningFrequencies(sleepEntries);
+
+        verifyNoMoreInteractions(sleepEntityRepository, sleepLogCalculatorService);
+    }
+
+    @Test
+    void shouldThrowWhenNoSleepLogsFound() {
+        UUID userId = UUID.randomUUID();
+
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate thirtyDaysAgo = today.minusDays(30);
+
+        when(sleepEntityRepository.findByUserIdAndSleepDateBetween(
+                eq(userId), eq(thirtyDaysAgo), eq(today)))
+                .thenReturn(List.of());
+
+        assertThrows(EntityNotFoundException.class,
+                () -> service.getLast30DayAverages(userId));
+
+        verify(sleepEntityRepository)
+                .findByUserIdAndSleepDateBetween(eq(userId), eq(thirtyDaysAgo), eq(today));
+
+        verifyNoInteractions(sleepLogCalculatorService);
     }
 }

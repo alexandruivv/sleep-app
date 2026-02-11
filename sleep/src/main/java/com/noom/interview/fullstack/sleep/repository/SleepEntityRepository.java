@@ -5,10 +5,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface SleepEntityRepository extends JpaRepository<SleepEntryEntity, UUID> {
     Optional<SleepEntryEntity> findByUserIdAndSleepDate(UUID userId, LocalDate sleepDate);
+    List<SleepEntryEntity> findByUserIdAndSleepDateBetween(UUID userId, LocalDate startDate, LocalDate endDate);
 }

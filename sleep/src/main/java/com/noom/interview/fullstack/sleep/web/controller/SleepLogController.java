@@ -3,6 +3,7 @@ package com.noom.interview.fullstack.sleep.web.controller;
 import com.noom.interview.fullstack.sleep.service.SleepLogService;
 import com.noom.interview.fullstack.sleep.service.UserService;
 import com.noom.interview.fullstack.sleep.web.requests.CreateSleepLogRequest;
+import com.noom.interview.fullstack.sleep.web.responses.SleepLogAveragesResponse;
 import com.noom.interview.fullstack.sleep.web.responses.SleepLogResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -71,5 +72,27 @@ public class SleepLogController {
     public SleepLogResponse getLastNightSleepLog() {
         UUID userId = userService.getCurrentUserId();
         return sleepLogService.getLastNightLog(userId);
+    }
+
+    @GetMapping("/averages/last-30-days")
+    @Operation(
+            summary = "Get last 30-day averages",
+            description = "Returns averages for the last 30 days (inclusive) in UTC.",
+            parameters = {
+                    @Parameter(
+                            name = "X-User-Id",
+                            in = ParameterIn.HEADER,
+                            required = true,
+                            description = "User identifier (UUID)",
+                            schema = @Schema(type = "string", format = "uuid", example = "11111111-1111-1111-1111-111111111111")
+                    )
+            }
+    )
+    @ApiResponse(responseCode = "200", description = "Averages returned",
+            content = @Content(schema = @Schema(implementation = SleepLogAveragesResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Missing/invalid user header", content = @Content)
+    public SleepLogAveragesResponse getLast30DayAverages() {
+        UUID userId = userService.getCurrentUserId();
+        return sleepLogService.getLast30DayAverages(userId);
     }
 }

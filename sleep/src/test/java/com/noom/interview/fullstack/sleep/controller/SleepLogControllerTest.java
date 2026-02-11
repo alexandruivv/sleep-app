@@ -20,12 +20,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import javax.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -120,5 +122,51 @@ class SleepLogControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void getLastNight_returns200_whenExists() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        SleepLogResponse response = SleepLogResponse.builder()
+                .id(UUID.randomUUID())
+                .sleepDate(LocalDate.now())
+                .timeInBedStart(Instant.parse("2026-02-10T22:00:00Z"))
+                .timeInBedEnd(Instant.parse("2026-02-11T06:00:00Z"))
+                .totalTimeInBedMinutes(480)
+                .morningFeeling(com.noom.interview.fullstack.sleep.model.MorningFeeling.GOOD)
+                .build();
+
+        when(userService.getCurrentUserId()).thenReturn(userId);
+        when(sleepLogService.getLastNightLog(userId)).thenReturn(response);
+
+        mockMvc.perform(get("/sleep-log")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(response.getId().toString()))
+                .andExpect(jsonPath("$.totalTimeInBedMinutes").value(480))
+                .andExpect(jsonPath("$.morningFeeling").value("GOOD"));
+    }
+
+    @Test
+    void getLastNight_returns404_whenMissing() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        when(userService.getCurrentUserId()).thenReturn(userId);
+        when(sleepLogService.getLastNightLog(userId))
+                .thenThrow(new EntityNotFoundException("Sleep log for today not found"));
+
+        mockMvc.perform(get("/sleep-log"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getLastNight_returns400_whenUserHeaderMissing() throws Exception {
+        when(userService.getCurrentUserId())
+                .thenThrow(new MissingUserIdHeaderException("Missing X-User-Id header"));
+
+        mockMvc.perform(get("/sleep-log"))
+                .andExpect(status().isBadRequest());
     }
 }

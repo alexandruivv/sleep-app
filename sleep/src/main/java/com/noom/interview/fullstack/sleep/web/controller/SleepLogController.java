@@ -49,4 +49,27 @@ public class SleepLogController {
         UUID userId = userService.getCurrentUserId();
         return sleepLogService.createLastNightLog(userId, request);
     }
+
+    @GetMapping
+    @Operation(
+            summary = "Get last night's sleep log",
+            description = "Returns today's sleep log for the current user.",
+            parameters = {
+                    @Parameter(
+                            name = "X-User-Id",
+                            in = ParameterIn.HEADER,
+                            required = true,
+                            description = "User identifier (UUID)",
+                            schema = @Schema(type = "string", format = "uuid")
+                    )
+            }
+    )
+    @ApiResponse(responseCode = "200", description = "Sleep log found",
+            content = @Content(schema = @Schema(implementation = SleepLogResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Sleep log not found")
+    @ApiResponse(responseCode = "400", description = "Missing or invalid X-User-Id header")
+    public SleepLogResponse getLastNightSleepLog() {
+        UUID userId = userService.getCurrentUserId();
+        return sleepLogService.getLastNightLog(userId);
+    }
 }

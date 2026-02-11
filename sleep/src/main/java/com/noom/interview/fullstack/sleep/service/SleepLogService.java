@@ -7,5 +7,7 @@ import java.util.UUID;
 
 public interface SleepLogService {
     SleepLogResponse createLastNightLog(UUID userId, CreateSleepLogRequest request);
+
+    SleepLogResponse getLastNightLog(UUID userId);
 }
 
